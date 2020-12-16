@@ -1,0 +1,122 @@
+//Conexión a la red
+ String server = "";
+ String ip = "144.202.34.148";
+ const char *ssid = "HOME78";
+ const char *password = "HOME781097";
+
+ //LIbrerias necesarias
+ #include <ArduinoJson.h>
+ #include <ESP8266WiFi.h>
+ #include <ESP8266HTTPClient.h>
+ #include <WiFiClient.h>
+ #include <Servo.h>
+
+//Pines necesarios
+int switch_pin1 = 4; //De
+int switch_pin2 = 2; //Iz
+const int PIN_TRIG = 14;
+const int PIN_ECHO = 12; 
+int anguloServo = 0;  
+Servo esServo;
+float tiempo;
+float distancia;
+String dato = "";
+
+//Metodo void
+void setup() {
+  Serial.begin(9600);
+  pinMode(switch_pin1, INPUT);
+  pinMode(switch_pin2, INPUT);
+  pinMode(PIN_TRIG, OUTPUT);
+  pinMode(PIN_ECHO, INPUT);
+  esServo.attach(5);
+  
+  //Conexión Wi-fi
+  Serial.println("Wifi Conectado");
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid,password);
+
+  while(WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+  }
+  Serial.println(" ");
+  Serial.println("WiFi Conectado");
+  Serial.println("IP Address : ");
+  Serial.println(WiFi.localIP());
+}
+
+
+//Metodo loop
+void loop() {
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    if((digitalRead(switch_pin1) == 1)&&(dato !="Derecha"))
+    {
+      anguloServo = 90;
+      esServo.write(anguloServo);
+      Serial.println("Estado del switch Derecha");
+      distancia = calcularDistancia();
+      Serial.println("La distancia es: ");
+      Serial.println(distancia);
+      dato = "Derecha";
+      post(dato, distancia);
+    }
+    if((digitalRead(switch_pin2) == 1)&&(dato != "Izquierda"))
+    {
+      anguloServo = -180;
+      esServo.write(anguloServo);
+      Serial.println("Estado del switch Izquierda");
+      distancia = calcularDistancia();
+      Serial.println("La distancia es: ");
+      Serial.println(distancia); 
+      dato = "Izquierda";
+      post(dato, distancia);
+    }
+    if((digitalRead(switch_pin1) == 0)&&(digitalRead(switch_pin2) == 0))
+    {
+      Serial.println("Estado del switch Centro");
+      distancia = calcularDistancia();
+      Serial.println("La distancia es: ");
+      Serial.println(distancia);
+      dato = "Centro";
+      post(dato, distancia);
+    }
+    delay(1000);
+  }
+}
+
+
+//Metodo para calcular distancia
+int calcularDistancia() {
+  digitalWrite(PIN_TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(PIN_TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(PIN_TRIG, LOW);
+  tiempo = pulseIn(PIN_ECHO, HIGH);
+  distancia = (tiempo / 29)/2;
+  return distancia;
+}
+
+//Envio de datos
+void post(String est, float distancia){
+  Serial.println("Inicio Post");
+  HTTPClient http;
+  String json;
+  server = "http://"+ip+":8080/PostDat/";
+
+  StaticJsonDocument<256> doc;
+  
+  
+  doc["estado"] = String(est);
+  doc["distancia"] = int(distancia);
+  serializeJson(doc, json);
+
+  http.begin(server);
+  http.addHeader("Content-Type", "application/json");
+  http.POST(json);
+  http.writeToStream(&Serial);
+  http.end();
+  Serial.println("\nTermino Post");
+}
